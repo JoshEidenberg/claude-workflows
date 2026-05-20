@@ -14,7 +14,59 @@ permissions:
   actions: read
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      claude_args: ${{ steps.compute.outputs.claude_args }}
+    steps:
+      - name: Compute claude_args from issue labels
+        id: compute
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # Default model/depth — used when no depth: label and no size: cue.
+          MODEL="claude-sonnet-4-5"
+          THINKING=""
+
+          if [ -n "${ISSUE:-}" ]; then
+            LABELS=$(gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          else
+            LABELS=""
+          fi
+          echo "labels: $LABELS"
+
+          # 1) Explicit depth label wins
+          if echo "$LABELS" | grep -q '^depth:max$'; then
+            MODEL="claude-opus-4-5"
+            THINKING="--max-thinking-tokens 16000"
+          elif echo "$LABELS" | grep -q '^depth:thorough$'; then
+            MODEL="claude-opus-4-5"
+          elif echo "$LABELS" | grep -q '^depth:standard$'; then
+            MODEL="claude-sonnet-4-5"
+          elif echo "$LABELS" | grep -q '^depth:quick$'; then
+            MODEL="claude-haiku-4-5"
+          else
+            # 2) Heuristic from type + size
+            if echo "$LABELS" | grep -q '^type:epic$'; then
+              MODEL="claude-opus-4-5"
+            elif echo "$LABELS" | grep -q '^type:research$'; then
+              MODEL="claude-opus-4-5"
+            elif echo "$LABELS" | grep -q '^size:L$'; then
+              MODEL="claude-opus-4-5"
+            elif echo "$LABELS" | grep -q '^size:XS$' || echo "$LABELS" | grep -q '^size:S$'; then
+              MODEL="claude-sonnet-4-5"
+            fi
+          fi
+
+          ARGS="--allowed-tools \"Bash,Edit,Read,Write,Glob,Grep\" --model $MODEL"
+          if [ -n "$THINKING" ]; then ARGS="$ARGS $THINKING"; fi
+          echo "claude_args=$ARGS" >> "$GITHUB_OUTPUT"
+          echo "::notice::Resolved claude_args: $ARGS"
+
   work:
+    needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,13 +76,22 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           label_trigger: "claude:go"
-          claude_args: '--allowed-tools "Bash,Edit,Read,Write,Glob,Grep"'
+          claude_args: ${{ needs.resolve.outputs.claude_args }}
           prompt: |
             # Label-aware operating instructions
 
             **First, inspect the issue's labels** with `gh issue view <number> --json labels --jq '.labels[].name'`. Your behavior depends on them.
 
             ## Type label dictates the deliverable
+
+            - **`type:epic`** — Master ticket. Your task is to break this into sub-tickets, not to implement it.
+              - Read the master issue body carefully. Identify 3–8 concrete, independently-shippable sub-tasks.
+              - For each sub-task, decide its `type:` (feature / bug / chore / research) and `size:` (XS / S / M).
+              - **If any sub-task would still be size:L**, decompose it further — the goal is right-sized work.
+              - Create each sub-ticket with `gh issue create`, passing `--title`, a markdown `--body` with Context / Acceptance criteria / Out of scope sections, and `--label "type:X,size:Y,status:ready"`. Include "Part of #<EPIC_NUMBER>" in each body.
+              - Do NOT add `claude:go` to the children — leave that for the user to trigger them.
+              - After creating all children, post ONE comment on the epic listing the children as a checklist: `- [ ] #N — title`. Then add the label `claude:needs-review` to the epic so the user sees it in the Waiting column.
+              - Do NOT write code, create a branch, or open a PR for the epic itself.
 
             - **`type:research`** — Investigation, not implementation.
               - Do NOT write code, create a branch, or open a PR.
@@ -61,7 +122,7 @@ jobs:
             - **`size:XS`** — Should be ~30 lines of diff or less. If you find yourself touching multiple files or modules, stop and post a comment proposing a breakdown.
             - **`size:S`** — A focused change in one or two files. Same stop-and-discuss rule if scope balloons.
             - **`size:M`** — Half-day of work, may touch a few related files.
-            - **`size:L`** — Likely too big for one PR. **Do NOT just plow through.** Post a comment proposing a breakdown into 2-5 smaller tickets and wait for the user. Only proceed if the user replies confirming you should do it as one.
+            - **`size:L`** — Likely too big for one PR. **Do NOT just plow through.** Post a comment proposing a breakdown into 2-5 smaller tickets and wait for the user. Only proceed if the user replies confirming you should do it as one. (This rule does not apply to `type:epic` — epics are explicitly meant to be broken down.)
             - No size label — proceed but flag it in the PR description so the user can size it in retrospect.
 
             ## Status / claude labels
@@ -72,7 +133,7 @@ jobs:
             ## Across all types — house rules
 
             - Always read `CLAUDE.md` first. Honor every off-limits entry.
-            - If acceptance criteria are vague or untestable, do NOT guess. Post a comment with your interpretation as proposed AC bullets and wait.
+            - If acceptance criteria are vague or untestable, do NOT guess. Post a comment with your interpretation as proposed AC bullets and wait. (Epics are an exception — for an epic, your job is to invent the AC for each sub-ticket.)
             - Run tests and any linters/typecheckers defined in CLAUDE.md before pushing.
             - If tests fail and the fix is unclear, push what you have and post a comment describing the failure rather than silently force-passing.
             - Branch naming: `claude/issue-<number>-<short-slug>`. Commit subjects: short imperative, no scope prefixes unless CLAUDE.md says otherwise.
