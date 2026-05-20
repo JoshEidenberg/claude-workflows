@@ -10,6 +10,8 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
+  actions: read
 
 jobs:
   work:
@@ -21,4 +23,4 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: "Bash,Edit,Read,Write,Glob,Grep"
+          claude_args: '--allowed-tools "Bash,Edit,Read,Write,Glob,Grep"'
