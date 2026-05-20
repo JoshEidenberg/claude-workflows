@@ -1,0 +1,58 @@
+name: Claude Picker (reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: claude-picker-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check global freeze
+        id: freeze
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COUNT=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "claude:freeze" --state open --json number --jq 'length')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "::notice::claude:freeze label present — picker paused."
+          fi
+
+      - name: Pick oldest ready ticket
+        if: steps.freeze.outputs.count == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Find open issues labeled status:ready, sorted oldest first, excluding ones already in flight or oversized.
+          CANDIDATES=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "status:ready" \
+            --state open \
+            --sort created \
+            --json number,labels \
+            --limit 50)
+
+          PICK=$(echo "$CANDIDATES" | jq -r '
+            map(select(
+              (.labels | map(.name) | (contains(["claude:go"]) or contains(["claude:blocked"]) or contains(["size:L"]))) | not
+            ))
+            | reverse
+            | .[0].number // empty
+          ')
+
+          if [ -z "$PICK" ]; then
+            echo "::notice::No eligible ready tickets."
+            exit 0
+          fi
+
+          echo "Picking issue #$PICK"
+          gh issue edit "$PICK" --repo "$GITHUB_REPOSITORY" --add-label "claude:go"

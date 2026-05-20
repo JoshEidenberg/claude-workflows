@@ -1,0 +1,38 @@
+name: Claude Groomer (reusable)
+
+on:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  groom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Groom backlog
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: "Bash,Read,Glob,Grep"
+          prompt: |
+            You are grooming the issue backlog for this repository. Use the `gh` CLI.
+
+            1. List candidates: `gh issue list --label status:needs-grooming --state open --json number,title,body,labels --limit 30`
+            2. For each issue, decide one of:
+               - **Duplicate** of an existing open issue → add label `claude:duplicate`, comment with the duplicate number, do NOT close.
+               - **Too vague** (no testable acceptance criteria) → comment with a proposed list of acceptance-criteria bullets and a clarifying question. Leave label as-is.
+               - **Too large** (looks like size:L or bigger, or spans many concerns) → comment proposing a breakdown into 2-5 smaller tickets. Add label `size:L` if not present. Leave `status:needs-grooming`.
+               - **Well-specced** (clear context, testable AC, scoped) → remove `status:needs-grooming`, add `status:ready` plus a size label (`size:XS|S|M`).
+
+            Rules:
+            - Never close or delete issues.
+            - Never edit issue bodies — only comment and re-label.
+            - If unsure, leave it alone and comment with your uncertainty.
+            - Be terse in comments. No preamble.
