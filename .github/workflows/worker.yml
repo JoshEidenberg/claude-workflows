@@ -26,13 +26,54 @@ jobs:
           label_trigger: "claude:go"
           claude_args: '--allowed-tools "Bash,Edit,Read,Write,Glob,Grep"'
           prompt: |
-            Before doing anything, check this issue's labels (you can use `gh issue view <number> --json labels`).
+            # Label-aware operating instructions
 
-            **If the issue has the `type:research` label**, this is a research/investigation ticket, not an implementation ticket. Your task:
-            - Do NOT write code, do NOT create a branch, do NOT open a pull request.
-            - Investigate the question and gather evidence (read code, fetch web pages, run commands as needed).
-            - Post ONE thorough comment on the issue containing your findings, analysis, and (if applicable) a recommendation. Use markdown — headings, bullets, code spans, links.
-            - Be specific. Cite file paths and line numbers when you reference code. Quote sources when you reference docs.
-            - When done, your comment is the deliverable. The issue should remain open for the user to close after reading.
+            **First, inspect the issue's labels** with `gh issue view <number> --json labels --jq '.labels[].name'`. Your behavior depends on them.
 
-            **Otherwise** (any other type — feature, bug, chore, or no type label), proceed with your normal workflow: read CLAUDE.md, implement the acceptance criteria, run tests, push a branch, and either open a PR or surface a branch link.
+            ## Type label dictates the deliverable
+
+            - **`type:research`** — Investigation, not implementation.
+              - Do NOT write code, create a branch, or open a PR.
+              - Investigate the question (read code, fetch docs, run read-only commands).
+              - Post ONE thorough comment on the issue with findings and a recommendation. Use markdown — headings, bullets, code spans, links.
+              - Cite file paths with line numbers when referencing code. Quote and link sources when referencing docs.
+              - Leave the issue open; the user closes it after reading.
+
+            - **`type:bug`** — Defect fix.
+              - Start by reproducing the bug. Write a failing test that captures the broken behavior BEFORE changing source code.
+              - Then make the minimum change needed to make the test pass.
+              - In the PR description, include: "Root cause", "Fix", and "Test output" sections.
+              - If you can't reproduce, post a comment with what you tried and what's needed from the user — do NOT open a PR.
+
+            - **`type:feature`** — New capability.
+              - Implement the acceptance criteria exactly. Don't expand scope.
+              - Add tests covering the new behavior.
+              - Follow conventions in CLAUDE.md (commit style, branch naming, off-limits).
+
+            - **`type:chore`** — Maintenance / refactor / docs.
+              - Keep the diff tight. No drive-by changes outside what the ticket asks.
+              - Tests only if behavior actually changes.
+
+            - **No type label** — Treat as `type:feature` but call out the missing label in the PR description so the user can add one.
+
+            ## Size label is a budget
+
+            - **`size:XS`** — Should be ~30 lines of diff or less. If you find yourself touching multiple files or modules, stop and post a comment proposing a breakdown.
+            - **`size:S`** — A focused change in one or two files. Same stop-and-discuss rule if scope balloons.
+            - **`size:M`** — Half-day of work, may touch a few related files.
+            - **`size:L`** — Likely too big for one PR. **Do NOT just plow through.** Post a comment proposing a breakdown into 2-5 smaller tickets and wait for the user. Only proceed if the user replies confirming you should do it as one.
+            - No size label — proceed but flag it in the PR description so the user can size it in retrospect.
+
+            ## Status / claude labels
+
+            - **`claude:freeze`** — Should not happen (picker filters these), but if you see it on the repo: stop, post a comment that you noticed the freeze, do nothing else.
+            - **`status:blocked`** or **`claude:blocked`** — Something is expected to need user input. Read the issue body and comments first; if the blocker is gone, proceed and remove the label. If still blocked, comment to clarify what's needed.
+
+            ## Across all types — house rules
+
+            - Always read `CLAUDE.md` first. Honor every off-limits entry.
+            - If acceptance criteria are vague or untestable, do NOT guess. Post a comment with your interpretation as proposed AC bullets and wait.
+            - Run tests and any linters/typecheckers defined in CLAUDE.md before pushing.
+            - If tests fail and the fix is unclear, push what you have and post a comment describing the failure rather than silently force-passing.
+            - Branch naming: `claude/issue-<number>-<short-slug>`. Commit subjects: short imperative, no scope prefixes unless CLAUDE.md says otherwise.
+            - PR descriptions: link the issue (`Closes #N`), describe what changed and why, paste relevant test output.
