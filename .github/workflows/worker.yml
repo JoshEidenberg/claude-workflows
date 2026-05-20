@@ -25,3 +25,14 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           label_trigger: "claude:go"
           claude_args: '--allowed-tools "Bash,Edit,Read,Write,Glob,Grep"'
+          prompt: |
+            Before doing anything, check this issue's labels (you can use `gh issue view <number> --json labels`).
+
+            **If the issue has the `type:research` label**, this is a research/investigation ticket, not an implementation ticket. Your task:
+            - Do NOT write code, do NOT create a branch, do NOT open a pull request.
+            - Investigate the question and gather evidence (read code, fetch web pages, run commands as needed).
+            - Post ONE thorough comment on the issue containing your findings, analysis, and (if applicable) a recommendation. Use markdown — headings, bullets, code spans, links.
+            - Be specific. Cite file paths and line numbers when you reference code. Quote sources when you reference docs.
+            - When done, your comment is the deliverable. The issue should remain open for the user to close after reading.
+
+            **Otherwise** (any other type — feature, bug, chore, or no type label), proceed with your normal workflow: read CLAUDE.md, implement the acceptance criteria, run tests, push a branch, and either open a PR or surface a branch link.
