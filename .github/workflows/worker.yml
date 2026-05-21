@@ -77,8 +77,17 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           label_trigger: "claude:go"
           claude_args: ${{ needs.resolve.outputs.claude_args }}
+          # Surface Claude's reasoning and a final report as comments on the issue/PR.
+          # Without these, the SDK can run successfully but leave nothing visible behind.
+          track_progress: "true"
+          display_report: "true"
+          show_full_output: "true"
           prompt: |
             # Label-aware operating instructions
+
+            ## You MUST end with a visible artifact on the issue
+
+            Every run MUST end with at least ONE of: a pushed branch, an opened PR, or a comment on the issue. If you exit without any of these, the user has no signal that anything happened — that is a bug. Even if you decide to do nothing (e.g. you couldn't reproduce a bug, or the ticket is too vague), POST A COMMENT explaining your decision.
 
             **First, inspect the issue's labels** with `gh issue view <number> --json labels --jq '.labels[].name'`. Your behavior depends on them.
 
