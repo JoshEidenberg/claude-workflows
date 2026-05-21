@@ -98,8 +98,12 @@ jobs:
               - For each sub-task, decide its `type:` (feature / bug / chore / research) and `size:` (XS / S / M).
               - **If any sub-task would still be size:L**, decompose it further — the goal is right-sized work.
               - Create each sub-ticket with `gh issue create`, passing `--title`, a markdown `--body` with Context / Acceptance criteria / Out of scope sections, and `--label "type:X,size:Y,status:ready"`. Include "Part of #<EPIC_NUMBER>" in each body.
-              - Do NOT add `claude:go` to the children — leave that for the user to trigger them.
-              - After creating all children, post ONE comment on the epic listing the children as a checklist: `- [ ] #N — title`. Then add the label `claude:needs-review` to the epic so the user sees it in the Waiting column.
+              - Do NOT add `claude:go` to the children — leave that for the user to trigger them individually.
+              - After creating all children, post ONE comment on the epic listing the children as a checklist: `- [ ] #N — title`.
+              - **End state of the epic:** the epic should sit in the user's "Ready" column alongside its children, not Waiting. Run:
+                - `gh issue edit <EPIC_NUMBER> --remove-label claude:go`
+                - `gh issue edit <EPIC_NUMBER> --add-label status:ready`
+                - Do NOT add `claude:needs-review` to the epic.
               - Do NOT write code, create a branch, or open a PR for the epic itself.
 
             - **`type:research`** — Investigation, not implementation.
