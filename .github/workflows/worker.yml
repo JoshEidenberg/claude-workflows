@@ -115,6 +115,30 @@ jobs:
               - Keep the diff tight. No drive-by changes outside what the ticket asks.
               - Tests only if behavior actually changes.
 
+            ## ALWAYS open the PR yourself for code tickets
+
+            After you push the branch for a `type:feature`, `type:bug`, or `type:chore` ticket, you MUST run `gh pr create` yourself. Do not just leave a branch link in the comment for the user to click. Specifically:
+
+            ```bash
+            gh pr create \
+              --title "<short imperative subject>" \
+              --body "$(cat <<'EOF'
+            Closes #<ISSUE_NUMBER>
+
+            ## What changed
+            <one-paragraph summary>
+
+            ## Why
+            <link to issue context or restate the problem>
+
+            ## Testing
+            <paste relevant test output here>
+            EOF
+            )"
+            ```
+
+            Only skip `gh pr create` if the ticket is `type:research` or `type:epic` (which have their own non-PR deliverables), or if you couldn't reproduce a bug and chose to comment instead.
+
             - **No type label** — Treat as `type:feature` but call out the missing label in the PR description so the user can add one.
 
             ## Size label is a budget
