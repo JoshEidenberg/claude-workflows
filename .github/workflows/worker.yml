@@ -30,7 +30,7 @@ jobs:
           # Approx pricing per 1M tokens (input / output):
           #   Haiku 4.5:  $0.80 / $4    — small tweaks, single-file changes, research summaries
           #   Sonnet 4.5: $3    / $15   — multi-file features, bug investigations
-          #   Opus 4.5:   $15   / $75   — complex architectural work, large refactors
+          #   Opus 4.7:   $15   / $75   — complex architectural work, large refactors
           #
           # The defaults below assume the average ticket is Haiku-tier.
 
@@ -48,10 +48,10 @@ jobs:
 
           # 1) Explicit depth label always wins
           if has 'depth:max'; then
-            MODEL="claude-opus-4-5"
+            MODEL="claude-opus-4-7"
             THINKING="--max-thinking-tokens 16000"
           elif has 'depth:thorough'; then
-            MODEL="claude-opus-4-5"
+            MODEL="claude-opus-4-7"
           elif has 'depth:standard'; then
             MODEL="claude-sonnet-4-5"
           elif has 'depth:quick'; then
@@ -94,7 +94,7 @@ jobs:
               M-feature|M-bug) MODEL="claude-sonnet-4-5" ;;
 
               # Large feature or bug — Opus
-              L-feature|L-bug) MODEL="claude-opus-4-5" ;;
+              L-feature|L-bug) MODEL="claude-opus-4-7" ;;
 
               # Anything else falls back to Haiku (safer for cost; user can override with depth:standard)
               *) MODEL="claude-haiku-4-5" ;;
