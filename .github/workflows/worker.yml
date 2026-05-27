@@ -26,8 +26,15 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          # Default model/depth — used when no depth: label and no size: cue.
-          MODEL="claude-sonnet-4-5"
+          # Cost-aware model selection. Default to the cheapest model that can do the work.
+          # Approx pricing per 1M tokens (input / output):
+          #   Haiku 4.5:  $0.80 / $4    — small tweaks, single-file changes, research summaries
+          #   Sonnet 4.5: $3    / $15   — multi-file features, bug investigations
+          #   Opus 4.5:   $15   / $75   — complex architectural work, large refactors
+          #
+          # The defaults below assume the average ticket is Haiku-tier.
+
+          MODEL="claude-haiku-4-5"
           THINKING=""
 
           if [ -n "${ISSUE:-}" ]; then
@@ -37,33 +44,67 @@ jobs:
           fi
           echo "labels: $LABELS"
 
-          # 1) Explicit depth label wins
-          if echo "$LABELS" | grep -q '^depth:max$'; then
+          has() { echo "$LABELS" | grep -q "^$1$"; }
+
+          # 1) Explicit depth label always wins
+          if has 'depth:max'; then
             MODEL="claude-opus-4-5"
             THINKING="--max-thinking-tokens 16000"
-          elif echo "$LABELS" | grep -q '^depth:thorough$'; then
+          elif has 'depth:thorough'; then
             MODEL="claude-opus-4-5"
-          elif echo "$LABELS" | grep -q '^depth:standard$'; then
+          elif has 'depth:standard'; then
             MODEL="claude-sonnet-4-5"
-          elif echo "$LABELS" | grep -q '^depth:quick$'; then
+          elif has 'depth:quick'; then
             MODEL="claude-haiku-4-5"
           else
-            # 2) Heuristic from type + size
-            if echo "$LABELS" | grep -q '^type:epic$'; then
-              MODEL="claude-opus-4-5"
-            elif echo "$LABELS" | grep -q '^type:research$'; then
-              MODEL="claude-opus-4-5"
-            elif echo "$LABELS" | grep -q '^size:L$'; then
-              MODEL="claude-opus-4-5"
-            elif echo "$LABELS" | grep -q '^size:XS$' || echo "$LABELS" | grep -q '^size:S$'; then
-              MODEL="claude-sonnet-4-5"
+            # 2) Heuristic from type + size — defaults to Haiku, escalates only when needed.
+
+            # Size buckets — the strongest signal
+            SIZE="M" # treat "no size label" as M
+            if has 'size:XS'; then SIZE="XS";
+            elif has 'size:S'; then SIZE="S";
+            elif has 'size:M'; then SIZE="M";
+            elif has 'size:L'; then SIZE="L";
             fi
+
+            # Type modifiers
+            TYPE="feature" # default assumption
+            if has 'type:epic'; then TYPE="epic";
+            elif has 'type:research'; then TYPE="research";
+            elif has 'type:chore'; then TYPE="chore";
+            elif has 'type:bug'; then TYPE="bug";
+            elif has 'type:feature'; then TYPE="feature";
+            fi
+
+            # Decision matrix
+            case "$SIZE-$TYPE" in
+              # XS and S: always Haiku — these are tiny scoped changes, Haiku handles fine
+              XS-*|S-*) MODEL="claude-haiku-4-5" ;;
+
+              # Research at any size — Haiku is fine (it's mostly reading + summarizing)
+              *-research) MODEL="claude-haiku-4-5" ;;
+
+              # Chore at any size — usually cosmetic / mechanical, Haiku is fine
+              *-chore) MODEL="claude-haiku-4-5" ;;
+
+              # Epic — generates child tickets, structured but small output. Haiku is fine.
+              *-epic) MODEL="claude-haiku-4-5" ;;
+
+              # Medium feature or bug — Sonnet
+              M-feature|M-bug) MODEL="claude-sonnet-4-5" ;;
+
+              # Large feature or bug — Opus
+              L-feature|L-bug) MODEL="claude-opus-4-5" ;;
+
+              # Anything else falls back to Haiku (safer for cost; user can override with depth:standard)
+              *) MODEL="claude-haiku-4-5" ;;
+            esac
           fi
 
           ARGS="--allowed-tools \"Bash,Edit,Read,Write,Glob,Grep\" --model $MODEL"
           if [ -n "$THINKING" ]; then ARGS="$ARGS $THINKING"; fi
           echo "claude_args=$ARGS" >> "$GITHUB_OUTPUT"
-          echo "::notice::Resolved claude_args: $ARGS"
+          echo "::notice::Resolved claude_args: $ARGS (size=${SIZE:-?} type=${TYPE:-?})"
 
   work:
     needs: resolve
