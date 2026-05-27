@@ -27,12 +27,13 @@ jobs:
         run: |
           set -euo pipefail
           # Cost-aware model selection. Default to the cheapest model that can do the work.
-          # Approx pricing per 1M tokens (input / output):
-          #   Haiku 4.5:  $0.80 / $4    — small tweaks, single-file changes, research summaries
-          #   Sonnet 4.5: $3    / $15   — multi-file features, bug investigations
-          #   Opus 4.7:   $15   / $75   — complex architectural work, large refactors
+          # Anthropic pricing per 1M tokens (input / output):
+          #   Haiku 4.5:   $1  / $5   — small tweaks, single-file changes, research summaries
+          #   Sonnet 4.6:  $3  / $15  — multi-file features, bug investigations
+          #   Opus 4.7:    $5  / $25  — complex agentic coding, large refactors
           #
           # The defaults below assume the average ticket is Haiku-tier.
+          # Note: Opus 4.7 has built-in adaptive thinking; extended thinking flag is not applicable.
 
           MODEL="claude-haiku-4-5"
           THINKING=""
@@ -48,12 +49,14 @@ jobs:
 
           # 1) Explicit depth label always wins
           if has 'depth:max'; then
-            MODEL="claude-opus-4-7"
+            # Sonnet 4.6 + extended thinking — deeper deliberation for tasks where reasoning matters.
+            # Opus 4.7 doesn't support the extended-thinking flag, so use Sonnet here.
+            MODEL="claude-sonnet-4-6"
             THINKING="--max-thinking-tokens 16000"
           elif has 'depth:thorough'; then
             MODEL="claude-opus-4-7"
           elif has 'depth:standard'; then
-            MODEL="claude-sonnet-4-5"
+            MODEL="claude-sonnet-4-6"
           elif has 'depth:quick'; then
             MODEL="claude-haiku-4-5"
           else
@@ -91,7 +94,7 @@ jobs:
               *-epic) MODEL="claude-haiku-4-5" ;;
 
               # Medium feature or bug — Sonnet
-              M-feature|M-bug) MODEL="claude-sonnet-4-5" ;;
+              M-feature|M-bug) MODEL="claude-sonnet-4-6" ;;
 
               # Large feature or bug — Opus
               L-feature|L-bug) MODEL="claude-opus-4-7" ;;
